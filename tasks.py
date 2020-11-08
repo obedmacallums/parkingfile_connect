@@ -21,16 +21,30 @@ def config(c):
     c['sudo']['password']= sudo_password
 
     config = configparser.ConfigParser()
+    public_key =  make_ssh_keys(c)
 
     config['DEFAULT'] = {'sudo_password': sudo_password, 
                         'parkingfile_username':parkingfile_username,
                         'parkingfile_token':parkingfile_token}
-    
+    config['AGENT'] = {'public_key_agent': public_key}
     with open('configfile', 'w') as configfile:
         config.write(configfile)
-
-    server_request(c)
     
+    
+    server_request(c)
+
+
+@task   
+def make_ssh_keys(c):
+    c.sudo('sudo ssh-keygen -t rsa -b 2048 -f /root/.ssh/parkingfile -N ""')
+    public_key = c.sudo('cat /root/.ssh/parkingfile.pub').stdout
+    return public_key
+
+    
+@task
+def allow_key(c):
+    pass
+
 
 
 @task
@@ -43,7 +57,8 @@ def server_request(c):
     sudo_password = config['DEFAULT']['sudo_password']
     parkingfile_username = config['DEFAULT']['parkingfile_username']
     parkingfile_token = config['DEFAULT']['parkingfile_token']
-    
+    public_key_agent = config['AGENT']['public_key_agent']
+
     c['sudo']['password'] = sudo_password
     
     headers={'Authorization': f'Token {parkingfile_token}'}
