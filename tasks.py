@@ -42,8 +42,14 @@ def make_ssh_keys(c):
 
     
 @task
-def allow_key(c):
-    pass
+def allow_key(c, key):
+    try:
+        
+        c.sudo(f'sudo bash -c "echo "{key}" > /root/.ssh/authorized_keys"')
+        return True
+    except Exception as e:
+        print(e)
+        return False
 
 
 
@@ -64,21 +70,33 @@ def server_request(c):
     headers={'Authorization': f'Token {parkingfile_token}'}
 
     while True:
+
         try:
             url = 'http://127.0.0.1:8000/api/server_request'
-            r = requests.get(url, headers=headers, params={'username':parkingfile_username})
-            print (r.json())
+            r = requests.post(url, headers=headers, data={'username':parkingfile_username, 'public_key': public_key_agent})
+            r_json = r.json()
+            print(r_json)
+            if r_json.get('created', False):
+                allow_key(c, r_json['public_key_to_agents'])
+                print ('se ha creado objeto agente')
+                print('levantando todo')
+                server_params = {}
+                up_docker(c, server_params)
+
+            else:
+                print('dejar el mismo container')
             time.sleep(5)
+
+
         except Exception as e:
             print(e)
-            update_docker(c)
             time.sleep(5)
 
 
 @task
-def update_docker(c):
-    ok = c.sudo('ls /root')
-    print(ok)
+def up_docker(c, server_params):
+    
+    print('se ha creado container')
 
 
 
