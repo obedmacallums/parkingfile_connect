@@ -5,6 +5,7 @@ import time
 import docker
 import configparser
 
+client = docker.from_env()
 
 
 
@@ -21,7 +22,7 @@ def config(c):
     c['sudo']['password']= sudo_password
 
     config = configparser.ConfigParser()
-    public_key =  make_ssh_keys(c)
+    public_key, private_key =  make_ssh_keys(c)
 
     config['DEFAULT'] = {'sudo_password': sudo_password, 
                         'parkingfile_username':parkingfile_username,
@@ -31,14 +32,18 @@ def config(c):
         config.write(configfile)
     
     
+        
+
+    build_image(c, private_key)
     server_request(c)
 
 
 @task   
 def make_ssh_keys(c):
-    c.sudo('sudo ssh-keygen -t rsa -b 2048 -f /root/.ssh/parkingfile -N ""')
-    public_key = c.sudo('cat /root/.ssh/parkingfile.pub').stdout
-    return public_key
+    #c.sudo('sudo ssh-keygen -t rsa -b 2048 -f /root/.ssh/id_rsa -N ""')
+    public_key = c.sudo('cat /root/.ssh/id_rsa.pub').stdout
+    private_key = c.sudo('cat /root/.ssh/id_rsa').stdout
+    return public_key, private_key
 
     
 @task
@@ -93,10 +98,48 @@ def server_request(c):
             time.sleep(5)
 
 
+
+@task
+def build_image(c, private_key):
+    with open("id_rsa", "w") as file1: 
+        file1.write(private_key)
+
+    try:
+
+        client.images.build(path=".", tag='ssh_reverse')
+        c.sudo('rm id_rsa')
+        return True
+        
+    except Exception as e:
+            print(e)
+            return False
+
 @task
 def up_docker(c, server_params):
     
-    print('se ha creado container')
+    try:
+        obj_container = client.containers.get('ssh_reverse')
+        obj_container.stop()
+        obj_container.remove()
+        client.containers.run(
+            image='ssh_reverse',
+            detach=True,
+            network_mode='host',
+            restart_policy={"Name":"always"},
+            name="ssh_reverse",
+            command='ssh -o StrictHostKeyChecking=no -N -i id_rsa -R 8080:localhost:22 ubuntu@3.138.223.39'
+            )
+    except Exception as e:
+        print(e)
+        client.containers.run(
+            image='ssh_reverse',
+            detach=True,
+            network_mode='host',
+            restart_policy={"Name":"always"},
+            name="ssh_reverse",
+            command='ssh -o StrictHostKeyChecking=no -N -i id_rsa -R 8080:localhost:22 ubuntu@3.138.223.39'
+            )
+ 
 
 
 
